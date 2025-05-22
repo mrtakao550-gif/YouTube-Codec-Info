@@ -1,17 +1,21 @@
-// inject.js (修正版 v2.2 - Improved Audio Estimation & EOTF Debug Log)
+// inject.js (完全な修正案 2025-05-22)
+
+// デバッグフラグ
+const DEBUG_THIS_ISSUE = false; // 問題解析時に true にする (通常は false)
+const VERBOSE_LOGGING = false;  // 詳細ログが必要な場合に true にする (通常は false)
 
 if (window.codecInfoInjectListenerAttached) {
-    // Listener already attached. Skipping setup.
+    if (VERBOSE_LOGGING) console.log("[Inject] Listener already attached. Skipping setup.");
 } else {
     window.codecInfoInjectListenerAttached = true;
-    console.log("[Inject] Script running (v2.2 EOTF Debug). Setting up listener."); // Version updated
+    if (VERBOSE_LOGGING) console.log("[Inject] Script running (VP9 Fix Attempt). Setting up listener.");
 
     window.addEventListener("message", (event) => {
         if (event.source !== window || !event.data || event.data.type !== "GET_CODEC_INFO") {
             return;
         }
 
-        console.log("[Inject] Received GET_CODEC_INFO request."); // Debug log re-enabled
+        if (VERBOSE_LOGGING) console.log("[Inject] Received GET_CODEC_INFO request.");
 
         let codecInfo = null;
         const player = document.getElementById('movie_player');
@@ -27,12 +31,8 @@ if (window.codecInfoInjectListenerAttached) {
             let playerResponse = null;
             if (typeof player.getPlayerResponse === 'function') {
                 playerResponse = player.getPlayerResponse();
-                // console.log("[Inject] player.getPlayerResponse() available.");
-            } else {
-                 // console.log("[Inject] player.getPlayerResponse() not available.");
             }
             if (!playerResponse && window.ytplayer && window.ytplayer.config && window.ytplayer.config.args && window.ytplayer.config.args.player_response) {
-                // console.log("[Inject] Trying ytplayer.config.args.player_response as fallback.");
                 try {
                     playerResponse = typeof window.ytplayer.config.args.player_response === 'string'
                         ? JSON.parse(window.ytplayer.config.args.player_response)
@@ -50,15 +50,12 @@ if (window.codecInfoInjectListenerAttached) {
                  return;
             }
 
-            // --- Format Parsing and Estimation ---
             if (playerResponse && playerResponse.streamingData) {
-                // console.log("[Inject] Parsing playerResponse.streamingData...");
                 const videoDetails = playerResponse.videoDetails;
                 const streamingData = playerResponse.streamingData;
                 const adaptiveFormats = streamingData.adaptiveFormats || [];
                 const formats = streamingData.formats || [];
                 const allFormats = [...adaptiveFormats, ...formats];
-                // console.log(`[Inject] Found ${adaptiveFormats.length} adaptive formats and ${formats.length} regular formats.`);
 
                 if (allFormats.length === 0) {
                      console.warn("[Inject] No formats found in streamingData.");
@@ -68,112 +65,166 @@ if (window.codecInfoInjectListenerAttached) {
 
                 // --- Get Current Playback State ---
                 let currentQualityLabel = null;
-                let currentHeight = null;
+                let currentHeight = null; // Prefer null if not reliably obtainable
                 let currentItag = null;
-                if (typeof player.getPlaybackQuality === 'function') { currentQualityLabel = player.getPlaybackQuality(); }
-                if (typeof player.getVideoHeight === 'function') { currentHeight = player.getVideoHeight(); }
+
+                if (typeof player.getPlaybackQuality === 'function') {
+                    currentQualityLabel = player.getPlaybackQuality(); // e.g., "hd2160", "hd1080"
+                }
                 if (typeof player.getVideoData === 'function') {
                     const videoData = player.getVideoData();
-                    currentItag = videoData?.itag;
-                    if (currentHeight === 0 && videoData?.height) { currentHeight = videoData.height; }
+                    if (videoData) {
+                        currentItag = videoData.itag; // Can be undefined
+                        // player.getVideoHeight() might return 0, videoData.height might be more reliable if available
+                        const playerHeight = (typeof player.getVideoHeight === 'function') ? player.getVideoHeight() : 0;
+                        currentHeight = playerHeight > 0 ? playerHeight : (videoData.height || null);
+                    }
                 }
-                // console.log("[Inject] Current playback state:", { currentItag, currentQualityLabel, currentHeight });
+                if (currentHeight === null && typeof player.getVideoHeight === 'function') {
+                    currentHeight = player.getVideoHeight(); // Fallback, but could be 0
+                    if (currentHeight === 0) currentHeight = null; // Treat 0 as unreliable
+                }
                 // --- End Playback State ---
 
+                if (DEBUG_THIS_ISSUE) {
+                    console.log('%c[Inject DEBUG] --- Current Playback State ---', 'color: yellow; font-weight: bold;');
+                    console.log(`%c[Inject DEBUG] Itag (from getVideoData): ${currentItag}`, 'color: yellow;');
+                    console.log(`%c[Inject DEBUG] QualityLabel (from getPlaybackQuality): ${currentQualityLabel}`, 'color: yellow;');
+                    console.log(`%c[Inject DEBUG] Height (processed): ${currentHeight}px`, 'color: yellow;');
+                    console.log('%c[Inject DEBUG] --- Available Adaptive Formats for Matching ---', 'color: violet; font-weight: bold;');
+                    adaptiveFormats.forEach((format, index) => {
+                         console.log(`%c[Inject DEBUG] adaptiveFormat[${index}]: itag=${format.itag}, mime=${format.mimeType}, qualityLabel=${format.qualityLabel}, height=${format.height}`, 'color: violet;');
+                    });
+                }
 
                 // --- Video Format Estimation ---
-                let currentVideoFormat = null;
-                if (currentItag) { /* Find by itag */ currentVideoFormat = allFormats.find(f => f.itag === currentItag && f.mimeType?.startsWith('video/')); }
-                if (!currentVideoFormat && (currentHeight || currentQualityLabel)) { /* Estimate by height/quality */
-                    const potentialMatches = adaptiveFormats.filter(f => f.mimeType?.startsWith('video/') && ((currentHeight && f.height === currentHeight) || (currentQualityLabel && f.qualityLabel === currentQualityLabel)));
-                    if (potentialMatches.length > 0) { currentVideoFormat = potentialMatches.find(f => f.mimeType?.includes('av01')) || potentialMatches.find(f => f.mimeType?.includes('vp09')) || potentialMatches.find(f => f.mimeType?.includes('avc1')) || potentialMatches[0]; }
-                    else { const potentialRegularMatches = formats.filter(f => f.mimeType?.startsWith('video/') && ((currentHeight && f.height === currentHeight) || (currentQualityLabel && f.qualityLabel === currentQualityLabel))); if (potentialRegularMatches.length > 0) { currentVideoFormat = potentialRegularMatches.find(f => f.mimeType?.includes('av01')) || potentialRegularMatches.find(f => f.mimeType?.includes('vp09')) || potentialRegularMatches.find(f => f.mimeType?.includes('avc1')) || potentialRegularMatches[0]; } }
+                currentVideoFormat = null; // Initialize
+
+                // 1. Try to find by currentItag if available
+                if (currentItag) {
+                    currentVideoFormat = allFormats.find(f => f.itag === currentItag && f.mimeType?.startsWith('video/'));
+                    if (VERBOSE_LOGGING && currentVideoFormat) console.log(`[Inject] Matched by itag: ${currentItag} -> ${currentVideoFormat.mimeType}`);
                 }
-                if (!currentVideoFormat) { /* Fallback */ currentVideoFormat = adaptiveFormats.find(f => f.mimeType?.includes('av01')) || adaptiveFormats.find(f => f.mimeType?.includes('vp09')) || adaptiveFormats.find(f => f.mimeType?.includes('avc1')) || formats.find(f => f.mimeType?.includes('av01')) || formats.find(f => f.mimeType?.includes('vp09')) || formats.find(f => f.mimeType?.includes('avc1')) || adaptiveFormats.find(f => f.mimeType?.startsWith('video/')) || formats.find(f => f.mimeType?.startsWith('video/')); }
-                // --- End Video Estimation ---
+
+                // 2. If not found by itag, try by qualityLabel and/or height
+                if (!currentVideoFormat && (currentQualityLabel || currentHeight)) {
+                    const normalizeQualityForComparison = (label) => {
+                        if (!label) return null;
+                        // "hd2160" -> "2160", "1080p" -> "1080", "2160p" -> "2160"
+                        return String(label).toLowerCase().replace(/^hd/, '').replace(/p$/, '');
+                    };
+                    const targetQualityNumber = normalizeQualityForComparison(currentQualityLabel); // e.g., "2160" or "1440"
+
+                    const filterAndSelect = (formatList) => {
+                        let candidates = [];
+                        if (targetQualityNumber) { // Prefer matching by quality number if currentQualityLabel is available
+                            candidates = formatList.filter(f => {
+                                if (!f.mimeType?.startsWith('video/')) return false;
+                                const formatQualityNumber = normalizeQualityForComparison(f.qualityLabel);
+                                if (formatQualityNumber === targetQualityNumber) return true;
+                                // As a fallback for quality, check if height matches the number derived from qualityLabel (e.g. 2160p vs height 2160)
+                                if (f.height && String(f.height) === targetQualityNumber) return true;
+                                return false;
+                            });
+                             if (VERBOSE_LOGGING || DEBUG_THIS_ISSUE) console.log(`[Inject DEBUG] Candidates by targetQualityNumber (${targetQualityNumber}):`, candidates.map(c => ({itag:c.itag, qL:c.qualityLabel, h:c.height,mime:c.mimeType})));
+                        }
+
+                        // If no candidates by quality OR if currentQualityLabel was not available, AND currentHeight is valid
+                        if (candidates.length === 0 && currentHeight && currentHeight > 0) {
+                            candidates = formatList.filter(f => f.mimeType?.startsWith('video/') && f.height === currentHeight);
+                            if (VERBOSE_LOGGING || DEBUG_THIS_ISSUE) console.log(`[Inject DEBUG] Candidates by currentHeight (${currentHeight}):`, candidates.map(c => ({itag:c.itag, qL:c.qualityLabel, h:c.height,mime:c.mimeType})));
+                        }
+                        
+                        if (candidates.length > 0) {
+                            return candidates.find(f => f.mimeType?.toLowerCase().includes('av01')) ||
+                                   candidates.find(f => f.mimeType?.toLowerCase().includes('vp09') || f.mimeType?.toLowerCase().includes('vp9')) ||
+                                   candidates.find(f => f.mimeType?.toLowerCase().includes('avc1')) ||
+                                   candidates[0]; // Fallback to the first candidate if no preferred codec found
+                        }
+                        return null;
+                    };
+
+                    currentVideoFormat = filterAndSelect(adaptiveFormats);
+                    if (!currentVideoFormat) { // If not in adaptive, try regular formats
+                        currentVideoFormat = filterAndSelect(formats);
+                    }
+                     if (VERBOSE_LOGGING && currentVideoFormat) console.log(`[Inject] Matched by quality/height logic -> ${currentVideoFormat.mimeType}`);
+                }
+
+                // 3. Absolute Fallback (if still no format is selected)
+                if (!currentVideoFormat) {
+                    if (VERBOSE_LOGGING) console.warn("[Inject] No specific format matched. Using general codec preference fallback.");
+                    currentVideoFormat =
+                        allFormats.find(f => f.mimeType?.toLowerCase().includes('av01') && f.mimeType?.startsWith('video/')) ||
+                        allFormats.find(f => (f.mimeType?.toLowerCase().includes('vp09') || f.mimeType?.toLowerCase().includes('vp9')) && f.mimeType?.startsWith('video/')) ||
+                        allFormats.find(f => f.mimeType?.toLowerCase().includes('avc1') && f.mimeType?.startsWith('video/')) ||
+                        allFormats.find(f => f.mimeType?.startsWith('video/')); // Last resort: any video format
+                    if (VERBOSE_LOGGING && currentVideoFormat) console.log(`[Inject] Matched by general fallback -> ${currentVideoFormat.mimeType}`);
+                }
+                // --- End Video Format Estimation ---
 
 
-                // --- Audio Format Estimation ---
+                // --- Audio Format Estimation (no changes from previous logic) ---
                 let currentAudioFormat = null;
                 const allAudioFormats = allFormats.filter(f => f.mimeType?.startsWith('audio/'));
-                // console.log(`[Inject] Found ${allAudioFormats.length} total audio formats.`);
-
                 if (allAudioFormats.length > 0) {
                     const opusFormats = allAudioFormats.filter(f => f.mimeType?.includes('opus'));
                     const aacFormats = allAudioFormats.filter(f => f.mimeType?.includes('mp4a'));
                     const otherAudioFormats = allAudioFormats.filter(f => !f.mimeType?.includes('opus') && !f.mimeType?.includes('mp4a'));
-
-                    // console.log(`[Inject] Audio formats breakdown: Opus(${opusFormats.length}), AAC(${aacFormats.length}), Other(${otherAudioFormats.length})`);
-                    // if (opusFormats.length > 0) opusFormats.forEach(f => console.log(` - Opus Candidate: itag=${f.itag}, bitrate=${f.bitrate}, quality=${f.audioQuality}`));
-                    // if (aacFormats.length > 0) aacFormats.forEach(f => console.log(` - AAC Candidate: itag=${f.itag}, bitrate=${f.bitrate}, quality=${f.audioQuality}`));
-
                     let bestOpus = null;
                     if (opusFormats.length > 0) { opusFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)); bestOpus = opusFormats[0]; }
                     let bestAac = null;
                     if (aacFormats.length > 0) { aacFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)); bestAac = aacFormats[0]; }
                     let bestOther = null;
-                     if (otherAudioFormats.length > 0) { otherAudioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)); bestOther = otherAudioFormats[0]; }
-
-                    if (bestOpus) { currentAudioFormat = bestOpus; /* console.log("[Inject] Selected best Opus format:", currentAudioFormat); */ }
-                    else if (bestAac) { currentAudioFormat = bestAac; /* console.log("[Inject] Selected best AAC format:", currentAudioFormat); */ }
-                    else if (bestOther){ currentAudioFormat = bestOther; /* console.log("[Inject] Selected best 'Other' audio format:", currentAudioFormat); */ }
-                } else {
-                    // console.warn("[Inject] No audio formats found in adaptive/regular lists.");
+                    if (otherAudioFormats.length > 0) { otherAudioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0)); bestOther = otherAudioFormats[0]; }
+                    if (bestOpus) { currentAudioFormat = bestOpus; }
+                    else if (bestAac) { currentAudioFormat = bestAac; }
+                    else if (bestOther){ currentAudioFormat = bestOther; }
                 }
-                // --- End Audio Estimation ---
+                // --- End Audio Format Estimation ---
 
-                if (!currentVideoFormat && !currentAudioFormat) {
-                     console.warn("[Inject] Could not determine any current video or audio format.");
-                     window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: "Could not determine format" }, "*");
-                     return;
-                }
+                const videoCodecString = currentVideoFormat?.mimeType?.match(/codecs="([^,"]+)/)?.[1] ||
+                                     (currentVideoFormat?.mimeType?.includes('vp9') || currentVideoFormat?.mimeType?.includes('vp09') ? 'vp9' : null) ||
+                                     (currentVideoFormat?.mimeType?.includes('av01') ? 'av01' : null) ||
+                                     (currentVideoFormat?.mimeType?.includes('avc1') ? 'avc1' : null);
 
-                // --- Extract Info ---
-                const videoCodecMatch = currentVideoFormat?.mimeType?.match(/codecs="([^,"]+)/);
-                const audioCodecMatch = currentAudioFormat?.mimeType?.match(/codecs="([^"]+)"/);
 
-                // ★★★ Log the raw colorInfo before creating codecInfo object ★★★
-                console.log("[Inject] Raw currentVideoFormat.colorInfo:", currentVideoFormat?.colorInfo);
+                const audioCodecString = currentAudioFormat?.mimeType?.match(/codecs="([^"]+)"/)?.[1];
 
                 codecInfo = {
-                    videoCodec: videoCodecMatch ? videoCodecMatch[1] : (currentVideoFormat ? 'N/A' : null),
-                    audioCodec: audioCodecMatch ? audioCodecMatch[1] : (currentAudioFormat ? 'N/A' : null),
+                    videoCodec: videoCodecString ? videoCodecString.split('.')[0] : (currentVideoFormat ? 'N/A' : null),
+                    audioCodec: audioCodecString ? audioCodecString.split('.')[0] : (currentAudioFormat ? 'N/A' : null),
                     qualityLabel: currentVideoFormat?.qualityLabel,
                     resolution: currentVideoFormat?.width && currentVideoFormat?.height ? `${currentVideoFormat.width}x${currentVideoFormat.height}` : null,
                     width: currentVideoFormat?.width,
                     height: currentVideoFormat?.height,
                     fps: currentVideoFormat?.fps,
-                    bitrate: currentVideoFormat?.bitrate,
-                    audioBitrate: currentAudioFormat?.bitrate,
-                    itag: currentVideoFormat?.itag,
-                    audioItag: currentAudioFormat?.itag,
-                    mimeType: currentVideoFormat?.mimeType,
-                    audioMimeType: currentAudioFormat?.mimeType,
+                    // bitrate: currentVideoFormat?.bitrate, // ビットレートは現在表示していない
+                    // audioBitrate: currentAudioFormat?.bitrate,
+                    // itag: currentVideoFormat?.itag,
+                    // audioItag: currentAudioFormat?.itag,
+                    // mimeType: currentVideoFormat?.mimeType, // デバッグ用
+                    // audioMimeType: currentAudioFormat?.mimeType, // デバッグ用
                     audioSampleRate: currentAudioFormat?.audioSampleRate,
                     audioChannels: currentAudioFormat?.audioChannels,
-                    colorInfo: currentVideoFormat?.colorInfo, // Pass the whole object
+                    colorInfo: currentVideoFormat?.colorInfo,
                     isLive: videoDetails?.isLive || false,
                     isDash: streamingData.dashManifestUrl !== undefined,
                     isMsl: streamingData.hlsManifestUrl !== undefined,
                 };
 
-                 console.log("[Inject] Final determined codecInfo (check colorInfo field):", codecInfo); // Final log
+                if (DEBUG_THIS_ISSUE || VERBOSE_LOGGING) console.log("[Inject] Final determined codecInfo:", JSON.stringify(codecInfo, null, 2));
 
             } else {
                 console.warn("[Inject] streamingData not found in playerResponse.");
-                 window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: "streamingData not found" }, "*");
-                 return;
+                window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: "streamingData not found" }, "*");
+                return;
             }
-
         } catch (error) {
-            console.error("[Inject] Error getting codec info:", error);
-            codecInfo = null;
-             window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: error.message }, "*");
-             return;
+            console.error("[Inject] Error in GET_CODEC_INFO processing:", error, error.stack);
+            window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: error.message }, "*");
+            return; // return を忘れない
         }
-
         window.postMessage({ type: "CODEC_INFO_RESULT", payload: codecInfo }, "*");
-
     }, false);
-
-} // end of listener attachment check
+}
