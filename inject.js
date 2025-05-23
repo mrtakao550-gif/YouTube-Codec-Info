@@ -1,5 +1,5 @@
-// inject.js (Release v2.3 - Cleaned)
-// console.log("[Inject] Script running (v2.3 Cleaned)"); // 起動ログは必要なら残す
+// inject.js (Release v2.3.1 - Log Level Adjustment)
+// console.log("[Inject] Script running (v2.3.1)"); // 必要なら起動ログは残す
 
 if (window.codecInfoInjectListenerAttached) {
     // Listener already attached.
@@ -16,6 +16,7 @@ if (window.codecInfoInjectListenerAttached) {
 
         try {
             if (!player) {
+                // この警告は重要なので残す
                 console.warn("[Inject] Movie player element (#movie_player) not found.");
                 window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: "Player element not found" }, "*");
                 return;
@@ -37,11 +38,13 @@ if (window.codecInfoInjectListenerAttached) {
             }
 
             if (!playerResponse) {
-                 console.warn("[Inject] Could not retrieve playerResponse data.");
+                 // ★変更箇所: console.warn から console.debug に変更
+                 console.debug("[Inject] Could not retrieve playerResponse data. This can be normal during page load or transitions.");
                  window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: "Could not retrieve playerResponse" }, "*");
                  return;
             }
 
+            // ... (以降のフォーマット解析、コーデック情報生成ロジックは変更なし) ...
             if (playerResponse && playerResponse.streamingData) {
                 const videoDetails = playerResponse.videoDetails;
                 const streamingData = playerResponse.streamingData;
@@ -50,7 +53,7 @@ if (window.codecInfoInjectListenerAttached) {
                 const allFormats = [...adaptiveFormats, ...formats];
 
                 if (allFormats.length === 0) {
-                     console.warn("[Inject] No formats found in streamingData.");
+                     console.warn("[Inject] No formats found in streamingData."); // これは重要な警告なので残す
                      window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: "No formats found" }, "*");
                      return;
                 }
@@ -75,7 +78,6 @@ if (window.codecInfoInjectListenerAttached) {
                     if (currentHeight === 0) currentHeight = null;
                 }
 
-                // --- Video Format Estimation (v1.3 logic) ---
                 let currentVideoFormat = null;
 
                 if (currentItag) {
@@ -124,9 +126,7 @@ if (window.codecInfoInjectListenerAttached) {
                         allFormats.find(f => f.mimeType?.toLowerCase().includes('avc1') && f.mimeType?.startsWith('video/')) ||
                         allFormats.find(f => f.mimeType?.startsWith('video/'));
                 }
-                // --- End Video Format Estimation ---
 
-                // --- Audio Format Estimation ---
                 let currentAudioFormat = null;
                 const allAudioFormats = allFormats.filter(f => f.mimeType?.startsWith('audio/'));
                 if (allAudioFormats.length > 0) {
@@ -143,7 +143,6 @@ if (window.codecInfoInjectListenerAttached) {
                     else if (bestAac) { currentAudioFormat = bestAac; }
                     else if (bestOther){ currentAudioFormat = bestOther; }
                 }
-                // --- End Audio Format Estimation ---
 
                 const videoCodecString = currentVideoFormat?.mimeType?.match(/codecs="([^,"]+)/)?.[1] ||
                                      (currentVideoFormat?.mimeType?.includes('vp9') || currentVideoFormat?.mimeType?.includes('vp09') ? 'vp9' : null) ||
@@ -168,12 +167,12 @@ if (window.codecInfoInjectListenerAttached) {
                 };
 
             } else {
-                console.warn("[Inject] streamingData not found in playerResponse.");
+                console.warn("[Inject] streamingData not found in playerResponse."); // これは重要な警告なので残す
                 window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: "streamingData not found" }, "*");
                 return;
             }
         } catch (error) {
-            console.error("[Inject] Error in GET_CODEC_INFO processing:", error, error.stack);
+            console.error("[Inject] Error in GET_CODEC_INFO processing:", error, error.stack); // 致命的なエラーは残す
             window.postMessage({ type: "CODEC_INFO_RESULT", payload: null, error: error.message }, "*");
             return;
         }

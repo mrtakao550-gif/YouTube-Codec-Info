@@ -6,64 +6,92 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="container">
-    <h2>Settings</h2>
+  <div class="popup-container">
+    <header class="popup-header">
+      <h2>Settings</h2>
+    </header>
 
-    <div class="setting-item">
-      <label for="toggle-visibility">Show Overlay:</label>
-      <label class="switch">
-        <input type="checkbox" id="toggle-visibility">
-        <span class="slider round"></span>
-      </label>
-      <span class="help-icon" id="help-show-overlay" title="Overlay visibility toggle">?</span> <!-- Added help icon -->
-    </div>
+    <div class="settings-section">
+      <div class="setting-item control-setting">
+        <label for="toggle-visibility" class="setting-label">Show Overlay</label>
+        <div class="setting-control">
+          <label class="switch">
+            <input type="checkbox" id="toggle-visibility">
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <button class="help-button" id="help-showOverlay" aria-label="Help for Show Overlay">?</button>
+      </div>
 
-    <div class="setting-item size-setting">
-      <label for="size-slider">Font Size:</label>
-      <input type="range" id="size-slider" min="10" max="20" step="1">
-      <span id="size-value">13px</span>
-       <span class="help-icon" id="help-font-size" title="Adjust overlay font size">?</span> <!-- Added help icon -->
-    </div>
+      <div class="setting-item control-setting">
+        <label for="size-slider" class="setting-label">Font Size</label>
+        <div class="setting-control slider-control">
+          <input type="range" id="size-slider" min="10" max="20" step="1">
+          <span id="size-value" class="value-display">13px</span>
+        </div>
+        <button class="help-button" id="help-fontSize" aria-label="Help for Font Size">?</button>
+      </div>
 
-    <hr>
-    <h3>Displayed Info:</h3>
-
-    <div class="setting-item toggle-item">
-      <label for="toggle-video-codec">🎬 Video Codec</label>
-      <input type="checkbox" id="toggle-video-codec" class="info-toggle">
-      <span class="help-icon" id="help-videoCodec" title="Learn about video codecs">?</span> <!-- Added help icon -->
-    </div>
-    <div class="setting-item toggle-item">
-      <label for="toggle-resolution-fps">🖼️ Resolution & FPS</label>
-      <input type="checkbox" id="toggle-resolution-fps" class="info-toggle">
-      <span class="help-icon" id="help-resolutionFps" title="Learn about resolution & FPS">?</span> <!-- Added help icon -->
-    </div>
-    <div class="setting-item toggle-item">
-      <label for="toggle-audio-codec">🔊 Audio Codec</label>
-      <input type="checkbox" id="toggle-audio-codec" class="info-toggle">
-       <span class="help-icon" id="help-audioCodec" title="Learn about audio codecs">?</span> <!-- Added help icon -->
-    </div>
-    <div class="setting-item toggle-item">
-      <label for="toggle-audio-details">👂 Audio Details (Rate/Ch)</label>
-      <input type="checkbox" id="toggle-audio-details" class="info-toggle">
-       <span class="help-icon" id="help-audioDetails" title="Learn about audio details">?</span> <!-- Added help icon -->
-    </div>
-    <div class="setting-item toggle-item">
-      <label for="toggle-color-space">🎨 Color Space / EOTF</label> <!-- Label updated -->
-      <input type="checkbox" id="toggle-color-space" class="info-toggle">
-       <span class="help-icon" id="help-colorSpace" title="Learn about color space & EOTF">?</span> <!-- Added help icon -->
-    </div>
-    <div class="setting-item toggle-item">
-      <label for="toggle-stream-status">🔴 Stream Status (Live/Dash)</label>
-      <input type="checkbox" id="toggle-stream-status" class="info-toggle">
-       <span class="help-icon" id="help-streamStatus" title="Learn about stream status">?</span> <!-- Added help icon -->
+      <div class="setting-item control-setting">
+        <label for="opacity-slider" class="setting-label">Overlay Opacity</label>
+        <div class="setting-control slider-control">
+          <input type="range" id="opacity-slider" min="0" max="100" step="5">
+          <span id="opacity-value" class="value-display">85%</span>
+        </div>
+        <button class="help-button" id="help-overlayOpacity" aria-label="Help for Overlay Opacity">?</button>
+      </div>
     </div>
 
-    <!-- Explanation Area -->
+    <hr class="section-divider">
+
+    <div class="settings-section">
+      <h3 class="section-title">Displayed Info</h3>
+      <div class="setting-item info-toggle-item">
+        <label for="toggle-video-codec" class="setting-label icon-label">🎬 Video Codec</label>
+        <div class="setting-control">
+          <input type="checkbox" id="toggle-video-codec" class="info-toggle">
+        </div>
+        <button class="help-button" id="help-videoCodec" aria-label="Help for Video Codec">?</button>
+      </div>
+      <div class="setting-item info-toggle-item">
+        <label for="toggle-resolution-fps" class="setting-label icon-label">🖼️ Resolution & FPS</label>
+        <div class="setting-control">
+          <input type="checkbox" id="toggle-resolution-fps" class="info-toggle">
+        </div>
+        <button class="help-button" id="help-resolutionFps" aria-label="Help for Resolution & FPS">?</button>
+      </div>
+      <div class="setting-item info-toggle-item">
+        <label for="toggle-audio-codec" class="setting-label icon-label">🔊 Audio Codec</label>
+        <div class="setting-control">
+          <input type="checkbox" id="toggle-audio-codec" class="info-toggle">
+        </div>
+        <button class="help-button" id="help-audioCodec" aria-label="Help for Audio Codec">?</button>
+      </div>
+      <div class="setting-item info-toggle-item">
+        <label for="toggle-audio-details" class="setting-label icon-label">👂 Audio Details</label>
+        <div class="setting-control">
+          <input type="checkbox" id="toggle-audio-details" class="info-toggle">
+        </div>
+        <button class="help-button" id="help-audioDetails" aria-label="Help for Audio Details">?</button>
+      </div>
+      <div class="setting-item info-toggle-item">
+        <label for="toggle-color-space" class="setting-label icon-label">🎨 Color/EOTF</label>
+        <div class="setting-control">
+          <input type="checkbox" id="toggle-color-space" class="info-toggle">
+        </div>
+        <button class="help-button" id="help-colorSpace" aria-label="Help for Color Space & EOTF">?</button>
+      </div>
+      <div class="setting-item info-toggle-item">
+        <label for="toggle-stream-status" class="setting-label icon-label">🔴 Stream Status</label>
+        <div class="setting-control">
+          <input type="checkbox" id="toggle-stream-status" class="info-toggle">
+        </div>
+        <button class="help-button" id="help-streamStatus" aria-label="Help for Stream Status">?</button>
+      </div>
+    </div>
+
     <div id="explanation-area" class="explanation-box" style="display: none;">
-      <!-- Content will be injected by JS -->
-    </div>
-
+      </div>
   </div>
   <script src="popup.js"></script>
 </body>

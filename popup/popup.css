@@ -1,159 +1,316 @@
-body {
-  font-family: sans-serif;
-  width: 280px; /* ポップアップの幅を広げる */
-  padding: 10px 15px; /* パディング調整 */
-  /* background-color は prefers-color-scheme で設定 */
-}
-/* Light mode default will be here */
+/* popup.css (UI/UX Improved Version) */
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --border-radius: 6px;
+  --transition-speed: 0.2s;
 
-.container {
+  /* Light Theme */
+  --bg-color-light: #f9f9f9;
+  --text-color-light: #0f0f0f;
+  --secondary-text-color-light: #606060;
+  --border-color-light: #e0e0e0;
+  --header-border-light: #ddd;
+  --switch-bg-light: #ccc;
+  --switch-bg-checked-light: #065fd4; /* YouTube Blue */
+  --slider-thumb-bg-light: #065fd4;
+  --slider-track-bg-light: #ddd;
+  --checkbox-accent-light: #065fd4;
+  --help-button-color-light: #606060;
+  --help-button-border-light: #ccc;
+  --explanation-bg-light: #f0f0f0;
+  --explanation-border-light: #e0e0e0;
+  --link-color-light: #065fd4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color-dark: #212121; /* YouTube Dark BG */
+    --text-color-dark: #fff;
+    --secondary-text-color-dark: #aaa;
+    --border-color-dark: #3b3b3b; /* Slightly lighter border for dark */
+    --header-border-dark: #3b3b3b;
+    --switch-bg-dark: #555;
+    --switch-bg-checked-dark: #3ea6ff; /* YouTube Blue (Dark) */
+    --slider-thumb-bg-dark: #3ea6ff;
+    --slider-track-bg-dark: #555;
+    --checkbox-accent-dark: #3ea6ff;
+    --help-button-color-dark: #aaa;
+    --help-button-border-dark: #555;
+    --explanation-bg-dark: #2c2c2c;
+    --explanation-border-dark: #444;
+    --link-color-dark: #3ea6ff;
+  }
+}
+
+body {
+  font-family: var(--font-family);
+  width: 300px; /* 少し幅を広げる */
+  padding: 0; /* bodyのpaddingは不要に */
+  margin: 0;
+  background-color: var(--bg-color-light);
+  color: var(--text-color-light);
+  transition: background-color var(--transition-speed), color var(--transition-speed);
+}
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--bg-color-dark);
+    color: var(--text-color-dark);
+  }
+}
+
+.popup-container {
   display: flex;
   flex-direction: column;
-  gap: 12px; /* 各設定間のスペースを少し調整 */
 }
 
-h2 {
-  margin: 0 0 10px 0;
-  font-size: 16px;
-  text-align: center;
-  border-bottom: 1px solid #ddd; /* 区切り線 */
-  padding-bottom: 8px;
-  /* color は prefers-color-scheme で設定 */
+.popup-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color-light);
 }
+@media (prefers-color-scheme: dark) {
+  .popup-header { border-bottom-color: var(--header-border-dark); }
+}
+.popup-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500; /* 少し細めに */
+  text-align: center;
+  color: inherit; /* 親から継承 */
+}
+
+.settings-section {
+  padding: 8px 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px; /* 設定項目間のギャップ */
+}
+.settings-section:first-of-type {
+    padding-top: 16px;
+}
+
+
+.section-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--secondary-text-color-light);
+  margin: 8px 0 4px 0; /* 上下のマージン調整 */
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-color-light);
+}
+@media (prefers-color-scheme: dark) {
+  .section-title {
+    color: var(--secondary-text-color-dark);
+    border-bottom-color: var(--border-color-dark);
+  }
+}
+
 
 .setting-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px; /* ラベルと要素の間のスペースを少し調整 */
+  min-height: 32px; /* 高さを確保 */
+  gap: 8px;
 }
 
-.size-setting label {
-  flex-shrink: 0; /* Font Size ラベルが縮まないように */
-}
-
-label {
+.setting-label {
   font-size: 14px;
-  /* color: #555; */ /* Set via prefers-color-scheme */
-  line-height: 1.3; /* アイコンとの縦位置調整用 */
-}
-
-/* Specific style for toggle items */
-.toggle-item label {
+  color: inherit;
   flex-grow: 1; /* ラベルがスペースを埋めるように */
+  flex-shrink: 1; /* 必要なら縮む */
+  white-space: nowrap; /* 基本は改行しない */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setting-label.icon-label {
+    display: flex;
+    align-items: center;
+    gap: 6px; /* 絵文字とテキストの間 */
 }
 
-/* --- Help Icon Styles --- */
-.help-icon {
-  display: inline-flex; /* Use flex for centering */
-  justify-content: center;
+
+.setting-control {
+  display: flex;
   align-items: center;
-  width: 16px;
-  height: 16px;
+  justify-content: flex-end; /* 右寄せ */
+  flex-shrink: 0; /* コントロール部分は縮まない */
+}
+.control-setting .setting-control { /* スイッチやスライダーを持つ項目のコントロールエリア */
+    min-width: 120px; /* スライダーと値表示のための最小幅 */
+}
+.info-toggle-item .setting-control { /* チェックボックスのみのコントロールエリア */
+    min-width: auto;
+}
+
+
+.setting-control.slider-control {
+  flex-grow: 1; /* スライダーコントロールは幅を広げる */
+  gap: 8px;
+}
+
+.value-display {
+  font-size: 13px;
+  color: var(--secondary-text-color-light);
+  min-width: 40px;
+  text-align: right;
+  white-space: nowrap;
+}
+@media (prefers-color-scheme: dark) {
+  .value-display { color: var(--secondary-text-color-dark); }
+}
+
+
+/* Help Button */
+.help-button {
+  background: none;
+  border: 1px solid var(--help-button-border-light);
+  color: var(--help-button-color-light);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   font-size: 11px;
   font-weight: bold;
-  border-radius: 50%;
-  border: 1px solid; /* Border color set in themes */
+  line-height: 18px; /* 中央揃えのため調整 */
+  text-align: center;
   cursor: help;
-  margin-left: 4px; /* Add some space */
-  flex-shrink: 0; /* Prevent shrinking */
-  box-sizing: border-box; /* Include border in size */
+  flex-shrink: 0;
+  transition: background-color var(--transition-speed), border-color var(--transition-speed);
+}
+.help-button:hover {
+  background-color: var(--explanation-bg-light); /* 少し背景色をつける */
+}
+@media (prefers-color-scheme: dark) {
+  .help-button {
+    border-color: var(--help-button-border-dark);
+    color: var(--help-button-color-dark);
+  }
+  .help-button:hover {
+    background-color: var(--explanation-bg-dark);
+  }
 }
 
-/* --- Explanation Area Styles --- */
-.explanation-box {
-  margin-top: 10px;
-  padding: 10px;
+
+/* Toggle Switch (W3Schools base, slightly adapted) */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 36px; /* 少し小さく */
+  height: 20px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--switch-bg-light);
+  transition: var(--transition-speed);
+  border-radius: 20px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px; width: 14px; /* 少し小さく */
+  left: 3px; bottom: 3px; /* 位置調整 */
+  background-color: white;
+  transition: var(--transition-speed);
+  border-radius: 50%;
+}
+input:checked + .slider { background-color: var(--switch-bg-checked-light); }
+input:checked + .slider:before { transform: translateX(16px); } /* 移動距離調整 */
+
+@media (prefers-color-scheme: dark) {
+  .slider { background-color: var(--switch-bg-dark); }
+  input:checked + .slider { background-color: var(--switch-bg-checked-dark); }
+}
+
+/* Range Slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%; /* flex-growで幅が決定される */
+  height: 8px;
+  background: var(--slider-track-bg-light);
   border-radius: 4px;
+  outline: none;
+  padding: 0;
+  margin: 0; /* slider-controlのgapで制御 */
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--slider-thumb-bg-light);
+  border-radius: 50%;
+  border: none; /* 枠線なし */
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--slider-thumb-bg-light);
+  border-radius: 50%;
+  border: none;
+}
+@media (prefers-color-scheme: dark) {
+  input[type="range"] { background: var(--slider-track-bg-dark); }
+  input[type="range"]::-webkit-slider-thumb { background: var(--slider-thumb-bg-dark); }
+  input[type="range"]::-moz-range-thumb { background: var(--slider-thumb-bg-dark); }
+}
+
+
+/* Checkbox */
+.info-toggle {
+  accent-color: var(--checkbox-accent-light);
+  width: 18px; /* サイズ調整 */
+  height: 18px;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) {
+  .info-toggle {
+    accent-color: var(--checkbox-accent-dark);
+    /* ダークモードでのチェックボックスの見た目改善 (必要であれば) */
+    /* filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9); */
+  }
+}
+
+
+/* Horizontal Rule */
+hr.section-divider {
+  border: none;
+  height: 1px;
+  background-color: var(--border-color-light);
+  margin: 8px 0; /* マージン調整 */
+}
+@media (prefers-color-scheme: dark) {
+  hr.section-divider { background-color: var(--border-color-dark); }
+}
+
+/* Explanation Box */
+.explanation-box {
+  margin: 8px 16px 16px 16px; /* 他のセクションとpaddingを合わせる */
+  padding: 12px;
+  border-radius: var(--border-radius);
   font-size: 13px;
   line-height: 1.5;
-  border: 1px solid; /* Border color set in themes */
-  /* background-color set in themes */
+  border: 1px solid var(--explanation-border-light);
+  background-color: var(--explanation-bg-light);
+  color: inherit;
 }
-
-.explanation-box p {
-    margin: 0 0 5px 0; /* Space between paragraph and link */
-}
-
-.explanation-box strong {
-    /* Color set in themes */
-    font-weight: 600;
-}
-
+.explanation-box p { margin: 0 0 8px 0; }
+.explanation-box p:last-child { margin-bottom: 0; }
+.explanation-box strong { font-weight: 500; color: inherit; }
 .wiki-link {
-    font-size: 12px;
-    /* color set in themes */
-    text-decoration: none;
+  font-size: 12px;
+  color: var(--link-color-light);
+  text-decoration: none;
 }
-.wiki-link:hover {
-    text-decoration: underline;
-}
+.wiki-link:hover { text-decoration: underline; }
 
-
-/* --- Toggle Switch CSS (No changes needed) --- */
-.switch { /* ... */ }
-.switch input { /* ... */ }
-.slider { /* ... */ }
-.slider:before { /* ... */ }
-input:checked + .slider { /* ... */ }
-input:checked + .slider:before { /* ... */ }
-.slider.round { /* ... */ }
-.slider.round:before { /* ... */ }
-
-/* --- Slider CSS (No changes needed) --- */
-#size-slider { /* ... */ }
-#size-value { /* ... */ }
-
-/* --- Other elements --- */
-hr {
-  border: none;
-  /* border-top: 1px solid #ddd; */ /* Set via prefers-color-scheme */
-  margin: 10px 0; /* Margin reduced slightly */
-}
-
-h3 {
-  font-size: 14px;
-  margin: 0 0 5px 0;
-  /* color: #444; */ /* Set via prefers-color-scheme */
-}
-
-/* --- Info Toggle Checkbox (No changes needed) --- */
-.info-toggle { /* ... */ }
-
-
-/* -- Light Mode Defaults -- */
-body { background-color: #f5f5f5; color: #333; }
-h2 { border-bottom-color: #ddd; color: #333; }
-label { color: #555; }
-hr { border-top: 1px solid #ddd; }
-h3 { color: #444; }
-#size-value { color: #333; }
-.slider { background-color: #ccc; }
-input:checked + .slider { background-color: #2196F3; }
-.info-toggle { accent-color: #2196F3; }
-.help-icon { border-color: #aaa; color: #777; }
-.explanation-box { background-color: #eee; border-color: #ccc; }
-.explanation-box strong { color: #222; }
-.wiki-link { color: #007bff; }
-
-
-/* --- Dark Mode Styles --- */
 @media (prefers-color-scheme: dark) {
-  body { background-color: #282828; color: #eee; }
-  h2 { border-bottom-color: #444; color: #eee; }
-  label { color: #ccc; }
-  hr { border-top: 1px solid #444; }
-  h3 { color: #bbb; }
-  #size-value { color: #eee; }
-  /* Toggle Switch Dark Mode */
-  .slider { background-color: #555; }
-  input:checked + .slider { background-color: #4d90fe; }
-  /* Checkbox Dark Mode */
-  .info-toggle { accent-color: #4d90fe; filter: invert(1) hue-rotate(180deg) brightness(1.1); } /* Adjusted filter */
-  /* Help Icon Dark Mode */
-  .help-icon { border-color: #666; color: #aaa; }
-  /* Explanation Box Dark Mode */
-  .explanation-box { background-color: #333; border-color: #555; }
-  .explanation-box strong { color: #fff; }
-  .wiki-link { color: #8ab4f8; } /* Google Dark Theme Link Color */
+  .explanation-box {
+    border-color: var(--explanation-border-dark);
+    background-color: var(--explanation-bg-dark);
+  }
+   .wiki-link { color: var(--link-color-dark); }
 }

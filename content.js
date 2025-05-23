@@ -1,5 +1,9 @@
-// content.js (Release v3.5.3 - Cleaned)
-console.log("YouTube Codec Info extension loaded. v3.5.3");
+// content.js (Release v3.5.6 - Log Level Adjustment for Inject Errors)
+console.log("YouTube Codec Info extension loaded. v3.5.6 - Log Level Adjustment");
+
+// --- デバッグフラグ ---
+// const DEBUG_STORAGE = false; // 必要に応じて true に設定し、ストレージ関連のログを確認
+const VERBOSE_LOGGING = false; // 通常の動作ログや、injectからの特定のエラーログ表示に使う
 
 let infoDisplay = null;
 let lastVideoId = null;
@@ -11,6 +15,7 @@ let isLoading表示 = false;
 let currentSettings = {
     isVisible: true,
     overlaySize: 13,
+    overlayOpacity: 0.85, // 要素全体の不透明度 (0.0 - 1.0)
     showVideoCodec: true,
     showResolutionFps: true,
     showAudioCodec: true,
@@ -22,10 +27,14 @@ let lastReceivedData = null;
 
 function injectScript(filePath) {
   const existingScript = document.getElementById('codec-info-injector-script');
-  if (existingScript) return;
+  if (existingScript) {
+    if (VERBOSE_LOGGING) console.log(`[Content] Inject script ${filePath} already exists.`);
+    return;
+  }
   const script = document.createElement('script');
   script.id = 'codec-info-injector-script';
   script.src = chrome.runtime.getURL(filePath);
+  script.onload = function() { if (VERBOSE_LOGGING) console.log(`[Content] ${filePath} injected and loaded.`); };
   script.onerror = function() { console.error(`[Content] Failed to load ${filePath}`); };
   (document.head || document.documentElement).appendChild(script);
 }
@@ -36,10 +45,12 @@ function getOrCreateOverlay() {
         infoDisplay = existingOverlay;
         const playerContainer = document.querySelector('#movie_player, .html5-video-player');
         if (playerContainer && !playerContainer.contains(infoDisplay)) {
+            if (VERBOSE_LOGGING) console.log("[Content] Appending existing overlay to player container.");
             playerContainer.appendChild(infoDisplay);
         }
         if (infoDisplay) {
              infoDisplay.style.fontSize = `${currentSettings.overlaySize}px`;
+             infoDisplay.style.opacity = String(currentSettings.overlayOpacity);
              const hasContent = infoDisplay.innerHTML.trim() !== '' && infoDisplay.innerHTML !== '読み込み中...';
              infoDisplay.style.display = currentSettings.isVisible && (hasContent || isLoading表示) ? 'block' : 'none';
              if (infoDisplay.style.display === 'block') {
@@ -50,11 +61,16 @@ function getOrCreateOverlay() {
     }
 
     const playerContainer = document.querySelector('#movie_player, .html5-video-player');
-    if (!playerContainer) return null;
+    if (!playerContainer) {
+        if (VERBOSE_LOGGING) console.log("[Content] Player container not found for new overlay.");
+        return null;
+    }
 
+    if (VERBOSE_LOGGING) console.log("[Content] Creating new overlay.");
     infoDisplay = document.createElement('div');
     infoDisplay.id = 'youtube-codec-info-overlay';
     infoDisplay.style.fontSize = `${currentSettings.overlaySize}px`;
+    infoDisplay.style.opacity = String(currentSettings.overlayOpacity);
 
     if (currentSettings.isVisible && isLoading表示) {
         infoDisplay.innerHTML = '読み込み中...';
@@ -92,26 +108,38 @@ function adjustOverlayPosition() {
     } else { targetBottom = defaultBottom; }
 
     if (overlay.style.bottom !== targetBottom) {
+        if (VERBOSE_LOGGING) console.log(`[AdjustPos] Adjusting overlay bottom to: ${targetBottom}`);
         overlay.style.bottom = targetBottom;
     }
 }
 
 function updateCodecInfo() {
+  if (VERBOSE_LOGGING) console.log("[Content] updateCodecInfo called.");
   const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
   let overlay = getOrCreateOverlay();
 
-  if (!player || !overlay) return;
+  if (!player) {
+    if (VERBOSE_LOGGING) console.log("[Content] updateCodecInfo: Player not found, cannot update.");
+    return;
+  }
+  if (!overlay) {
+    if (VERBOSE_LOGGING) console.log("[Content] updateCodecInfo: Overlay could not be created/retrieved.");
+    overlay = getOrCreateOverlay();
+    if (!overlay) return;
+  }
 
   const currentVideoId = getCurrentVideoId();
 
   if (currentVideoId && currentVideoId !== lastVideoId) {
+      if (VERBOSE_LOGGING) console.log(`[Content] New video detected (or first load on video page). Old: ${lastVideoId}, New: ${currentVideoId}`);
       lastVideoId = currentVideoId;
       lastReceivedData = null;
       isLoading表示 = true;
 
-      if (currentSettings.isVisible) { // overlayはgetOrCreateOverlayで取得済みのはず
+      if (currentSettings.isVisible) {
           overlay.innerHTML = '読み込み中...';
           overlay.style.fontSize = `${currentSettings.overlaySize}px`;
+          overlay.style.opacity = String(currentSettings.overlayOpacity);
           overlay.style.display = 'block';
           requestAnimationFrame(adjustOverlayPosition);
       } else {
@@ -120,6 +148,7 @@ function updateCodecInfo() {
       }
   }
   try {
+    if (VERBOSE_LOGGING) console.log("[Content] Posting GET_CODEC_INFO message to inject script.");
     window.postMessage({ type: "GET_CODEC_INFO" }, "*");
   } catch (e) {
     console.error("[Content] Error posting message to inject script:", e);
@@ -137,6 +166,7 @@ function getCurrentVideoId() {
 
 function buildInfoHtml(data) {
     if (!data) return '';
+    if (VERBOSE_LOGGING) console.log("[Content] Building Info HTML with data:", JSON.stringify(data));
     try {
         const videoQuality = data.qualityLabel || data.resolution || (data.height ? `${data.height}p` : '');
         const videoFps = data.fps ? `@${data.fps}` : '';
@@ -190,8 +220,13 @@ function buildInfoHtml(data) {
 window.addEventListener("message", (event) => {
     if (event.source !== window || !event.data || event.data.type !== "CODEC_INFO_RESULT") return;
 
+    if (VERBOSE_LOGGING) console.log("[Content] Received message from inject script:", event.data);
+
     const overlay = getOrCreateOverlay();
-    if (!overlay) return;
+    if (!overlay) {
+        if (VERBOSE_LOGGING) console.warn("[Content] Overlay not available in message event listener.");
+        return;
+    }
 
     if (event.data.payload) {
         lastReceivedData = event.data.payload;
@@ -203,13 +238,36 @@ window.addEventListener("message", (event) => {
         overlay.style.display = shouldBeVisible ? 'block' : 'none';
         if (shouldBeVisible) { requestAnimationFrame(adjustOverlayPosition); }
     } else if (event.data.error) {
-        console.warn(`[Content] Error from inject: ${event.data.error}`);
+        const knownTransientErrors = [
+            "Could not retrieve playerResponse",
+            "Player element not found",
+            "No formats found",
+            "streamingData not found"
+        ];
+
+        if (VERBOSE_LOGGING) {
+            console.warn(`[Content] Error from inject: ${event.data.error}`);
+        } else {
+            if (knownTransientErrors.includes(event.data.error)) {
+                 console.debug(`[Content] Info from inject (transient or expected error): ${event.data.error}`);
+            } else {
+                console.warn(`[Content] Unexpected error from inject: ${event.data.error}`);
+            }
+        }
+
         if (!isLoading表示) {
-            overlay.innerHTML = `エラー: ${event.data.error}`;
-            overlay.style.display = currentSettings.isVisible ? 'block' : 'none';
+            // 一時的なエラーや、ユーザーに直接影響が少ないエラーはオーバーレイに表示しない
+            if (!knownTransientErrors.includes(event.data.error)) {
+                overlay.innerHTML = `エラー: ${event.data.error}`; // もしくはより汎用的な「情報取得エラー」
+                overlay.style.display = currentSettings.isVisible ? 'block' : 'none';
+            } else if (overlay.innerHTML === '読み込み中...') {
+                // playerResponse未取得などのエラーで「読み込み中」ならそのまま維持
+                // 必要であれば、数秒後にクリアするなどのタイムアウト処理も検討
+            }
         }
         lastReceivedData = null;
-    } else {
+    } else { // payloadもerrorもない場合
+        if (VERBOSE_LOGGING) console.log("[Content] Received empty payload and no error from inject.");
         if (!isLoading表示) {
             overlay.innerHTML = '';
             overlay.style.display = 'none';
@@ -219,11 +277,18 @@ window.addEventListener("message", (event) => {
 }, false);
 
 function applySettings(settings) {
+  if (VERBOSE_LOGGING) console.log("[Content] applySettings called with:", settings);
   currentSettings = { ...currentSettings, ...settings };
   const overlay = getOrCreateOverlay();
-  if (!overlay) return;
+  if (!overlay) {
+    if (VERBOSE_LOGGING) console.warn("[Content] applySettings: Overlay not available.");
+    return;
+  }
 
   overlay.style.fontSize = `${currentSettings.overlaySize}px`;
+  overlay.style.opacity = String(currentSettings.overlayOpacity);
+
+
   if (lastReceivedData && currentSettings.isVisible) {
       isLoading表示 = false;
       const newHtml = buildInfoHtml(lastReceivedData);
@@ -237,9 +302,10 @@ function applySettings(settings) {
       overlay.style.display = 'block';
       requestAnimationFrame(adjustOverlayPosition);
       if (getCurrentVideoId()) {
+          if (VERBOSE_LOGGING) console.log("[Content] applySettings: Visible, no data, requesting update.");
           setTimeout(() => updateCodecInfo(), 250);
       }
-  } else {
+  } else { // Not visible
       isLoading表示 = false;
       overlay.innerHTML = '';
       overlay.style.display = 'none';
@@ -248,22 +314,35 @@ function applySettings(settings) {
 
 function loadInitialSettings() {
   const keysToGet = Object.keys(currentSettings);
+  if (VERBOSE_LOGGING) console.log("[Content] loadInitialSettings: Attempting to load for keys:", keysToGet);
+
   chrome.storage.sync.get(keysToGet, (items) => {
     if (chrome.runtime.lastError) {
       console.error("[Content] loadInitialSettings: Error loading from chrome.storage:", chrome.runtime.lastError.message);
+      if (VERBOSE_LOGGING) console.log("[Content] loadInitialSettings: Applying default settings due to storage error.");
       applySettings({ ...currentSettings });
       return;
     }
+
+    if (VERBOSE_LOGGING) console.log("[Content] loadInitialSettings: Settings loaded from storage:", items);
+
     const loadedSettings = {};
+    let appliedAtLeastOneFromStorage = false;
     for (const key of keysToGet) {
       if (items && items.hasOwnProperty(key) && items[key] !== undefined) {
         loadedSettings[key] = items[key];
+        appliedAtLeastOneFromStorage = true;
       } else {
         loadedSettings[key] = currentSettings[key];
       }
     }
+    if (VERBOSE_LOGGING && !appliedAtLeastOneFromStorage) console.log("[Content] loadInitialSettings: No settings found in storage, all default values were used.");
+
+    if (VERBOSE_LOGGING) console.log("[Content] loadInitialSettings: Applying final settings:", loadedSettings);
     applySettings(loadedSettings);
+
     if (getCurrentVideoId()) {
+      if (VERBOSE_LOGGING) console.log("[Content] loadInitialSettings: Video page detected, scheduling initial updateCodecInfo.");
       setTimeout(updateCodecInfo, 600);
     }
   });
@@ -271,39 +350,51 @@ function loadInitialSettings() {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "SETTINGS_UPDATED") {
+        if (VERBOSE_LOGGING) console.log("[Content] Received SETTINGS_UPDATED message:", request.payload);
         applySettings(request.payload);
-        sendResponse({ status: "Settings applied by content script" });
+        sendResponse({ status: "Settings applied by content script (v3.5.6)" });
     }
     return true;
 });
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'sync') {
+    if (VERBOSE_LOGGING) console.log("[Content] chrome.storage.onChanged detected in 'sync' namespace:", changes);
     const changedKeys = Object.keys(changes);
     if (changedKeys.some(key => currentSettings.hasOwnProperty(key))) {
+        if (VERBOSE_LOGGING) console.log("[Content] Relevant settings changed in storage, reloading all settings.");
         loadInitialSettings();
     }
   }
 });
 
 function startChecking() {
-    if (checkInterval) return;
+    if (checkInterval) {
+        if (VERBOSE_LOGGING) console.log("[Content] startChecking: Periodic check already running.");
+        return;
+    }
+    if (VERBOSE_LOGGING) console.log("[Content] startChecking: Starting periodic check logic...");
 
     const checkInjectLoadedInterval = setInterval(() => {
         const injectorScript = document.getElementById('codec-info-injector-script');
         if (injectorScript && typeof window.postMessage === 'function') {
             clearInterval(checkInjectLoadedInterval);
+            if (VERBOSE_LOGGING) console.log("[Content] Inject script confirmed. Starting main update interval.");
             checkInterval = setInterval(() => {
                 try {
                     if(getCurrentVideoId() && document.querySelector('#movie_player, .html5-video-player')) {
+                        if (VERBOSE_LOGGING) console.log("[Content] Interval: Calling updateCodecInfo & adjustOverlayPosition");
                         updateCodecInfo();
                         adjustOverlayPosition();
+                    } else if (VERBOSE_LOGGING && getCurrentVideoId()){
+                        // On video page but player might have been removed temporarily
                     }
                 } catch (error) {
                     console.error("[Content] Error inside main update interval:", error);
                 }
             }, 200);
         } else {
+             if (VERBOSE_LOGGING && !injectorScript) console.log("[Content] Inject script not found by checkInjectLoadedInterval, attempting to inject...");
              if (!injectorScript) injectScript('inject.js');
         }
     }, 500);
@@ -311,7 +402,7 @@ function startChecking() {
     setTimeout(() => {
        if (!checkInterval && checkInjectLoadedInterval) {
            clearInterval(checkInjectLoadedInterval);
-           console.error("[Content] Timeout: Inject script did not load or postMessage not ready within 10s.");
+           console.error("[Content] Timeout: Inject script did not load or postMessage not ready within 10s. Periodic checks not started.");
        }
     }, 10000);
 }
@@ -320,11 +411,15 @@ function stopChecking() {
     if (checkInterval) {
         clearInterval(checkInterval);
         checkInterval = null;
+        if (VERBOSE_LOGGING) console.log("[Content] Stopped periodic checks.");
     }
 }
 
 function observePlayerAndNavigation() {
-     if (observer) observer.disconnect();
+     if (observer) {
+        if (VERBOSE_LOGGING) console.log("[Content] Disconnecting existing MutationObserver.");
+        observer.disconnect();
+     }
      const targetNode = document.body;
      const config = { childList: true, subtree: true };
      let currentHref = document.location.href;
@@ -336,6 +431,7 @@ function observePlayerAndNavigation() {
          navigationDebounceTimer = setTimeout(() => {
              if (document.location.href !== currentHref) {
                  currentHref = document.location.href;
+                 if (VERBOSE_LOGGING) console.log("[Content] MutationObserver: Navigation detected by href change to:", currentHref);
                  handleNavigation();
              }
          }, 150);
@@ -346,12 +442,14 @@ function observePlayerAndNavigation() {
                  mutation.addedNodes.forEach(node => {
                      if (node.nodeType === 1 && (node.id === 'movie_player' || (node.classList && node.classList.contains('html5-video-player')) || (node.querySelector && (node.querySelector('#movie_player') || node.querySelector('.html5-video-player'))))) {
                         playerStateChanged = true;
+                        if (VERBOSE_LOGGING) console.log("[Content] MutationObserver: Player element potentially added.");
                      }
                  });
                  if (playerStateChanged) break;
                  mutation.removedNodes.forEach(node => {
-                     if (node.nodeType === 1 && node.id === 'movie_player') {
+                     if (node.nodeType === 1 && node.id === 'movie_player') { // More specific check for removal
                         playerStateChanged = true;
+                        if (VERBOSE_LOGGING) console.log("[Content] MutationObserver: Player element (#movie_player) removed.");
                      }
                  });
              }
@@ -361,23 +459,28 @@ function observePlayerAndNavigation() {
          if (playerStateChanged) {
              clearTimeout(playerCheckDebounceTimer);
              playerCheckDebounceTimer = setTimeout(() => {
+                 if (VERBOSE_LOGGING) console.log("[Content] MutationObserver: Player DOM state change detected. Triggering handleNavigation.");
                  handleNavigation();
              }, 250);
          }
      });
      observer.observe(targetNode, config);
+     if (VERBOSE_LOGGING) console.log("[Content] MutationObserver for player and navigation started/restarted.");
  }
 
  function handleNavigation() {
      const isOnWatchPage = getCurrentVideoId();
      const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
 
+     if (VERBOSE_LOGGING) console.log(`[Content] handleNavigation: isOnWatchPage: ${!!isOnWatchPage}, player found: ${!!player}`);
+
      if (isOnWatchPage && player) {
          if (!checkInterval) {
+            if (VERBOSE_LOGGING) console.log("[Content] handleNavigation: On watch page with player, and checks not running. Starting init sequence.");
             injectScript('inject.js');
             isLoading表示 = true;
             const overlay = getOrCreateOverlay();
-            if (overlay && currentSettings.isVisible) {
+            if (overlay && currentSettings.isVisible && (!infoDisplay.innerHTML || infoDisplay.innerHTML !== '読み込み中...')) { // Don't overwrite if already "読み込み中..."
                 overlay.innerHTML = '読み込み中...';
                 overlay.style.display = 'block';
                 requestAnimationFrame(adjustOverlayPosition);
@@ -385,10 +488,12 @@ function observePlayerAndNavigation() {
             loadInitialSettings();
             startChecking();
          } else {
+            if (VERBOSE_LOGGING) console.log("[Content] handleNavigation: On watch page with player, checks already running. Calling updateCodecInfo.");
             updateCodecInfo();
             requestAnimationFrame(adjustOverlayPosition);
          }
      } else {
+        if (VERBOSE_LOGGING) console.log("[Content] handleNavigation: Not on watch page or player not found. Cleaning up.");
         if (checkInterval) { stopChecking(); }
         const overlay = document.getElementById('youtube-codec-info-overlay');
         if (overlay) {
@@ -402,17 +507,23 @@ function observePlayerAndNavigation() {
  }
 
 // --- Initialization ---
+if (VERBOSE_LOGGING) console.log("[Content] Initializing content script (v3.5.6)...");
 loadInitialSettings();
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+        if (VERBOSE_LOGGING) console.log("[Content] DOMContentLoaded event fired.");
         observePlayerAndNavigation();
         handleNavigation();
     });
 } else {
+    if (VERBOSE_LOGGING) console.log("[Content] DOM already loaded, proceeding with initialization.");
     observePlayerAndNavigation();
     handleNavigation();
 }
+
 window.addEventListener('beforeunload', () => {
+    if (VERBOSE_LOGGING) console.log("[Content] beforeunload event. Stopping checks and observer.");
     stopChecking();
     if(observer) observer.disconnect();
 });
