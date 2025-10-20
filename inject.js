@@ -1,6 +1,45 @@
 // inject.js (Release v2.3.1 - Log Level Adjustment)
 // console.log("[Inject] Script running (v2.3.1)"); // 必要なら起動ログは残す
 
+const CODECS_LINE_PREFIX = "Codecs";
+
+function extractPlaybackItags(player) {
+    if (!player || typeof player.getDebugText !== 'function') {
+        return null;
+    }
+    try {
+        const debugText = player.getDebugText();
+        if (typeof debugText !== 'string' || !debugText.trim()) {
+            return null;
+        }
+        const codecLine = debugText.split(/\r?\n/).find(line => line.startsWith(CODECS_LINE_PREFIX));
+        if (!codecLine) {
+            return null;
+        }
+        const parts = codecLine.replace(/^Codecs\s+/, '').split(/\s*\/\s*/);
+        const parsePart = (part) => {
+            if (!part) {
+                return null;
+            }
+            const match = part.match(/(.+?)\s*\((\d+)\)/);
+            if (!match) {
+                return null;
+            }
+            return {
+                codec: match[1].trim(),
+                itag: match[2].trim(),
+            };
+        };
+        return {
+            video: parsePart(parts[0]),
+            audio: parsePart(parts[1]),
+        };
+    } catch (err) {
+        console.debug("[Inject] Failed to parse getDebugText output:", err);
+        return null;
+    }
+}
+
 if (window.codecInfoInjectListenerAttached) {
     // Listener already attached.
 } else {
@@ -61,6 +100,10 @@ if (window.codecInfoInjectListenerAttached) {
                 let currentQualityLabel = null;
                 let currentHeight = null;
                 let currentItag = null;
+                let debugVideoItag = null;
+                let debugAudioItag = null;
+                let debugVideoCodec = null;
+                let debugAudioCodec = null;
 
                 if (typeof player.getPlaybackQuality === 'function') {
                     currentQualityLabel = player.getPlaybackQuality();
@@ -78,10 +121,32 @@ if (window.codecInfoInjectListenerAttached) {
                     if (currentHeight === 0) currentHeight = null;
                 }
 
+                const playbackFromDebug = extractPlaybackItags(player);
+                if (playbackFromDebug) {
+                    if (playbackFromDebug.video) {
+                        debugVideoItag = playbackFromDebug.video.itag || null;
+                        debugVideoCodec = playbackFromDebug.video.codec || null;
+                    }
+                    if (playbackFromDebug.audio) {
+                        debugAudioItag = playbackFromDebug.audio.itag || null;
+                        debugAudioCodec = playbackFromDebug.audio.codec || null;
+                    }
+                }
+
                 let currentVideoFormat = null;
 
-                if (currentItag) {
-                    currentVideoFormat = allFormats.find(f => f.itag === currentItag && f.mimeType?.startsWith('video/'));
+                if (debugVideoItag) {
+                    currentVideoFormat = allFormats.find(f => String(f.itag) === String(debugVideoItag) && f.mimeType?.startsWith('video/'));
+                    if (!currentVideoFormat) {
+                        currentVideoFormat = allFormats.find(f => String(f.itag) === String(debugVideoItag));
+                    }
+                }
+
+                if (!currentVideoFormat && currentItag) {
+                    currentVideoFormat = allFormats.find(f => String(f.itag) === String(currentItag) && f.mimeType?.startsWith('video/'));
+                    if (!currentVideoFormat) {
+                        currentVideoFormat = allFormats.find(f => String(f.itag) === String(currentItag));
+                    }
                 }
 
                 if (!currentVideoFormat && (currentQualityLabel || currentHeight)) {
@@ -129,7 +194,12 @@ if (window.codecInfoInjectListenerAttached) {
 
                 let currentAudioFormat = null;
                 const allAudioFormats = allFormats.filter(f => f.mimeType?.startsWith('audio/'));
-                if (allAudioFormats.length > 0) {
+                if (debugAudioItag) {
+                    currentAudioFormat =
+                        allAudioFormats.find(f => String(f.itag) === String(debugAudioItag)) ||
+                        allFormats.find(f => String(f.itag) === String(debugAudioItag));
+                }
+                if (!currentAudioFormat && allAudioFormats.length > 0) {
                     const opusFormats = allAudioFormats.filter(f => f.mimeType?.includes('opus'));
                     const aacFormats = allAudioFormats.filter(f => f.mimeType?.includes('mp4a'));
                     const otherAudioFormats = allAudioFormats.filter(f => !f.mimeType?.includes('opus') && !f.mimeType?.includes('mp4a'));
@@ -144,11 +214,15 @@ if (window.codecInfoInjectListenerAttached) {
                     else if (bestOther){ currentAudioFormat = bestOther; }
                 }
 
-                const videoCodecString = currentVideoFormat?.mimeType?.match(/codecs="([^,"]+)/)?.[1] ||
-                                     (currentVideoFormat?.mimeType?.includes('vp9') || currentVideoFormat?.mimeType?.includes('vp09') ? 'vp9' : null) ||
-                                     (currentVideoFormat?.mimeType?.includes('av01') ? 'av01' : null) ||
-                                     (currentVideoFormat?.mimeType?.includes('avc1') ? 'avc1' : null);
-                const audioCodecString = currentAudioFormat?.mimeType?.match(/codecs="([^"]+)"/)?.[1];
+                const videoCodecString =
+                    currentVideoFormat?.mimeType?.match(/codecs="([^,"]+)/)?.[1] ||
+                    debugVideoCodec ||
+                    (currentVideoFormat?.mimeType?.includes('vp9') || currentVideoFormat?.mimeType?.includes('vp09') ? 'vp9' : null) ||
+                    (currentVideoFormat?.mimeType?.includes('av01') ? 'av01' : null) ||
+                    (currentVideoFormat?.mimeType?.includes('avc1') ? 'avc1' : null);
+                const audioCodecString =
+                    currentAudioFormat?.mimeType?.match(/codecs="([^"]+)"/)?.[1] ||
+                    debugAudioCodec;
 
                 codecInfo = {
                     videoCodec: videoCodecString ? videoCodecString.split('.')[0] : (currentVideoFormat ? 'N/A' : null),
